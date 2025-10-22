@@ -89,16 +89,15 @@
         
         /* ADJUSTMENT: Allow long text in the modal to wrap and fit */
         .winner-name-text {
-            word-wrap: break-word; /* Ensure wrapping on very long words if needed */
-            overflow-wrap: break-word; /* Standard property for wrapping */
-            text-overflow: clip; /* Prevent overflow display issues */
+            word-wrap: break-word; 
+            overflow-wrap: break-word; 
+            text-overflow: clip; 
         }
 
         /* NEW SCROLLBAR STYLES FOR WINNER LIST */
-        /* Make the scrollbar festive for the winner list box */
         #modal-winner-name::-webkit-scrollbar { width: 8px; }
-        #modal-winner-name::-webkit-scrollbar-track { background: #fee2e2; border-radius: 10px; } /* Red Track */
-        #modal-winner-name::-webkit-scrollbar-thumb { background: #facc15; border-radius: 10px; } /* Gold Thumb */
+        #modal-winner-name::-webkit-scrollbar-track { background: #fee2e2; border-radius: 10px; } 
+        #modal-winner-name::-webkit-scrollbar-thumb { background: #facc15; border-radius: 10px; } 
     </style>
 </head>
 
@@ -109,7 +108,7 @@
         
         <!-- Header: Logo and Title -->
         <div class="text-center mb-6">
-            <!-- UPDATED: Use the external URL for the logo -->
+            <!-- Use the external URL for the logo -->
             <img src="https://prbs.pnp.gov.ph/wp-content/uploads/2022/05/PNP-PRBS.png" 
                  alt="PNP Retirement and Benefits Administration Service Logo" 
                  onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
@@ -131,7 +130,7 @@
             <!-- Contestant List Area -->
             <div class="p-4 bg-green-50 rounded-xl shadow-inner border-4 border-dashed border-green-400">
                 <h2 class="text-xl font-bold font-christmas text-green-800 mb-3">Contestants List</h2>
-                <p class="text-sm text-gray-600 mb-2">Enter one name per line. (**Names are saved automatically to your browser**).</p>
+                <p class="text-sm text-gray-600 mb-2">Enter one name per line. (Names are saved automatically).</p>
                 <textarea id="contestant-input" rows="10" class="w-full p-3 border-4 border-red-500/70 rounded-lg focus:ring-red-600 focus:border-red-600 transition duration-150 text-gray-800 bg-white shadow-md" placeholder="Name 1&#10;Name 2&#10;Santa Claus"></textarea>
                 <div class="mt-3 text-red-700 font-semibold" id="count-display">0 Contestants Ready</div>
             </div>
@@ -140,11 +139,17 @@
             <div class="flex flex-col items-center justify-center p-4 bg-red-50 rounded-xl shadow-2xl border-4 border-dashed border-red-400">
                 <h2 class="text-xl font-bold font-christmas text-red-800 mb-4">Spin to Win!</h2>
                 
-                <!-- NEW: Number of Winners Input -->
+                <!-- Number of Winners Input -->
                 <div class="w-full mb-4">
                     <label for="num-winners" class="block text-sm font-semibold text-gray-700 mb-1">Number of Winners for this Prize:</label>
                     <input type="number" id="num-winners" value="1" min="1" class="w-full p-2 border-2 border-green-500 rounded-lg text-center font-bold text-lg focus:ring-green-600 focus:border-green-600 transition duration-150" oninput="validateNumWinners()">
                     <p id="winner-error" class="text-xs text-red-500 mt-1 hidden font-semibold">Cannot exceed the number of available contestants!</p>
+                </div>
+
+                <!-- TTS TOGGLE -->
+                <div class="flex items-center space-x-2 mb-4">
+                    <input type="checkbox" id="tts-toggle" checked class="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500">
+                    <label for="tts-toggle" class="text-sm font-semibold text-gray-700 select-none">Announce Winner with Voice (TTS)</label>
                 </div>
 
                 <!-- 3D Spinning Indicator (Sphere) -->
@@ -166,10 +171,11 @@
                         onclick="startRaffle()">
                     <i id="raffle-icon" class="fa-solid fa-gift mr-2"></i> START RAFFLE SPIN
                 </button>
+                <p id="tts-status" class="text-xs text-gray-500 mt-2 hidden">Voice announcement starting...</p>
             </div>
         </div>
         
-        <!-- MODIFIED: Winners History Area with Clear Button -->
+        <!-- Winners History Area with Clear Button -->
         <div class="mt-8 p-4 bg-yellow-50 rounded-xl shadow-inner border-4 border-dashed border-yellow-400">
             <h2 class="text-xl font-bold font-christmas text-red-800 mb-3 flex items-center justify-between">
                 <div class="flex items-center">
@@ -218,13 +224,12 @@
         </div>
     </div>
 
-    <!-- Script Block (Now using Local Storage) -->
+    <!-- Script Block (Includes TTS, Three.js, and Raffle Logic) -->
     <script>
         // Global State
         window.contestants = [];
-        window.currentWinners = []; // Changed to hold multiple winners
+        window.currentWinners = []; 
         window.isSpinning = false;
-        // Array to store history of winners removed from the list
         window.winnersHistory = [];
         
         // DOM Elements
@@ -238,13 +243,16 @@
         const winnerAnnouncementEl = document.getElementById('winner-announcement');
         const confettiContainer = document.getElementById('confetti-container');
         const winnersHistoryListEl = document.getElementById('winners-history-list');
-        // NEW DOM Elements
         const numWinnersInput = document.getElementById('num-winners');
         const winnerErrorEl = document.getElementById('winner-error');
         const modalTitleEl = document.getElementById('modal-title');
         const modalQuestionEl = document.getElementById('modal-question');
+        const ttsToggle = document.getElementById('tts-toggle');
+        const ttsStatusEl = document.getElementById('tts-status');
 
-
+        // Audio Context (Initialize lazily on first user interaction)
+        let audioContext = null;
+        
         // --- LOCAL STORAGE DATA HANDLING ---
         const CONTESTANT_STORAGE_KEY = 'raffleContestantsList';
         const WINNERS_STORAGE_KEY = 'raffleWinnersHistory';
@@ -252,17 +260,14 @@
         function saveNamesToLocalStorage(namesString) {
             try {
                 localStorage.setItem(CONTESTANT_STORAGE_KEY, namesString);
-                console.log("Names saved to Local Storage.");
             } catch (error) {
                 console.error("Failed to save contestants list to Local Storage:", error);
             }
         }
         
-        // Save winners history
         function saveWinnersToLocalStorage() {
             try {
                 localStorage.setItem(WINNERS_STORAGE_KEY, JSON.stringify(window.winnersHistory));
-                console.log("Winners history saved.");
             } catch (error) {
                 console.error("Failed to save winners history to Local Storage:", error);
             }
@@ -270,42 +275,184 @@
 
         function loadNamesFromLocalStorage() {
             try {
-                // Load Contestants
                 const namesString = localStorage.getItem(CONTESTANT_STORAGE_KEY) || ""; 
                 contestantInput.value = namesString;
                 updateContestantList(namesString);
                 
-                // Load Winners History
                 const winnersString = localStorage.getItem(WINNERS_STORAGE_KEY) || "[]";
                 window.winnersHistory = JSON.parse(winnersString);
-                renderWinnersHistory(); // Display the loaded history
-
-                console.log("All data loaded from Local Storage.");
+                renderWinnersHistory(); 
             } catch (error) {
                 console.error("Failed to load data from Local Storage:", error);
             }
         }
         
-        // Function to clear the history
         window.clearWinnersHistory = function() {
-            // 1. Reset the global array
             window.winnersHistory = [];
-            
-            // 2. Clear the local storage entry
             try {
                 localStorage.removeItem(WINNERS_STORAGE_KEY);
-                console.log("Winners history cleared from Local Storage.");
             } catch (error) {
                 console.error("Failed to clear winners history from Local Storage:", error);
             }
-            
-            // 3. Update the UI
             renderWinnersHistory(); 
+        }
+
+        // --- TTS UTILITIES (REQUIRED FOR PCM AUDIO) ---
+
+        // Convert Base64 string to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Convert PCM (raw audio data) to a standard WAV Blob
+        function pcmToWav(pcm16, sampleRate) {
+            const numChannels = 1;
+            const bytesPerSample = 2; // 16-bit PCM
+
+            const buffer = new ArrayBuffer(44 + pcm16.length * bytesPerSample);
+            const view = new DataView(buffer);
+
+            // RIFF chunk descriptor
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + pcm16.length * bytesPerSample, true);
+            writeString(view, 8, 'WAVE');
+            
+            // FMT sub-chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true); // Sub-chunk size
+            view.setUint16(20, 1, true); // Audio format (1 for PCM)
+            view.setUint16(22, numChannels, true); // Number of channels
+            view.setUint32(24, sampleRate, true); // Sample rate
+            view.setUint32(28, sampleRate * numChannels * bytesPerSample, true); // Byte rate
+            view.setUint16(32, numChannels * bytesPerSample, true); // Block align
+            view.setUint16(34, 16, true); // Bits per sample
+            
+            // DATA sub-chunk
+            writeString(view, 36, 'data');
+            view.setUint32(40, pcm16.length * bytesPerSample, true); // Data size
+            
+            // Write PCM samples
+            let offset = 44;
+            for (let i = 0; i < pcm16.length; i++, offset += bytesPerSample) {
+                view.setInt16(offset, pcm16[i], true);
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+        }
+
+        // --- TTS API CALL AND PLAYBACK ---
+        async function playTtsAudio(winnerNames) {
+            if (!ttsToggle.checked) return;
+
+            // 1. Prepare the text prompt
+            const basePrompt = winnerNames.length === 1 
+                ? `The lucky winner is... ${winnerNames[0]}! Congratulations!`
+                : `We have ${winnerNames.length} winners! Congratulations to: ${winnerNames.join(', and ')}!`;
+
+            // Use an exciting, upbeat voice
+            const ttsPrompt = `Say cheerfully and excitedly: ${basePrompt}`;
+            
+            // 2. Setup the API call
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: ttsPrompt }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: "Puck" } // Upbeat voice
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+
+            ttsStatusEl.textContent = "Voice announcement generating...";
+            ttsStatusEl.classList.remove('hidden');
+
+            // 3. Fetch and process the response (with basic retry)
+            let response, result;
+            const maxRetries = 3;
+            let delay = 1000;
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        result = await response.json();
+                        break; // Success
+                    } else if (response.status === 429) {
+                        // Rate limit error, retry with exponential backoff
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; 
+                        continue;
+                    } else {
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error(`TTS API attempt ${i + 1} failed:`, error);
+                    if (i === maxRetries - 1) {
+                         ttsStatusEl.textContent = "Voice failed (API error).";
+                         setTimeout(() => ttsStatusEl.classList.add('hidden'), 3000);
+                         return; 
+                    }
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+
+            const part = result?.candidates?.[0]?.content?.parts?.[0];
+            const audioData = part?.inlineData?.data;
+            const mimeType = part?.inlineData?.mimeType;
+
+            if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 16000; // Default to 16000 Hz if not specified
+
+                const pcmData = base64ToArrayBuffer(audioData);
+                const pcm16 = new Int16Array(pcmData);
+                const wavBlob = pcmToWav(pcm16, sampleRate);
+                const audioUrl = URL.createObjectURL(wavBlob);
+                
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                const audio = new Audio(audioUrl);
+                audio.play();
+
+                ttsStatusEl.textContent = "Voice announcement playing...";
+                audio.onended = () => {
+                    ttsStatusEl.classList.add('hidden');
+                    URL.revokeObjectURL(audioUrl);
+                };
+            } else {
+                ttsStatusEl.textContent = "Voice failed (bad data).";
+                setTimeout(() => ttsStatusEl.classList.add('hidden'), 3000);
+            }
         }
 
         // --- CORE RAFFLE LOGIC ---
         
-        // NEW: Validation function for the number of winners
         window.validateNumWinners = function() {
             let num = parseInt(numWinnersInput.value);
             const max = window.contestants.length;
@@ -320,7 +467,6 @@
             }
             numWinnersInput.value = num;
             
-            // Disable raffle if spinning or if there are no contestants or if the required winners > contestants
             raffleButton.disabled = window.isSpinning || window.contestants.length === 0 || num > window.contestants.length;
         }
 
@@ -333,7 +479,6 @@
 
             countDisplay.textContent = `${window.contestants.length} Contestant${window.contestants.length !== 1 ? 's' : ''} Ready`;
             
-            // Call validation to update button state and winner count input
             window.validateNumWinners(); 
 
             if (window.contestants.length === 0) {
@@ -343,22 +488,18 @@
             }
         }
         
-        // Function to display the winners history
         function renderWinnersHistory() {
             const clearButton = document.getElementById('clear-history-button');
 
             if (window.winnersHistory.length === 0) {
                 winnersHistoryListEl.innerHTML = '<p class="text-gray-500">No winners recorded yet.</p>';
-                if (clearButton) clearButton.disabled = true; // Disable if empty
+                if (clearButton) clearButton.disabled = true; 
                 return;
             }
             
-            // Enable if there are winners
             if (clearButton) clearButton.disabled = false;
 
-            // Display as festive badges, including the sequential spin number (index + 1)
             winnersHistoryListEl.innerHTML = window.winnersHistory.map((name, index) => 
-                // Index + 1 gives the spin number (e.g., 1, 2, 3...)
                 `<span class="inline-block bg-red-100 text-red-800 text-sm font-bold mr-2 mb-2 px-3 py-1 rounded-full border border-red-400 hover:bg-red-200 transition duration-150">
                     [#${index + 1}] ${name}
                 </span>`
@@ -408,11 +549,8 @@
             confettiContainer.innerHTML = '';
             
             // --- Select Multiple Unique Winners ---
-            
-            // 1. Create a copy of contestants
             let availableContestants = [...window.contestants];
 
-            // 2. Shuffle the array (Fisher-Yates) and slice the required number of winners
             for (let i = availableContestants.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [availableContestants[i], availableContestants[j]] = [availableContestants[j], availableContestants[i]];
@@ -421,17 +559,15 @@
             window.currentWinners = availableContestants.slice(0, numWinners);
             
             // --- UI Spin Animation ---
-
             threeDContainer.classList.add('spin-active');
             raffleButton.textContent = 'SPINNING...';
-            winnerNameEl.textContent = `Finding ${numWinners} Winner${numWinners !== 1 ? 's' : ''}...`; // Show count during spin
+            winnerNameEl.textContent = `Finding ${numWinners} Winner${numWinners !== 1 ? 's' : ''}...`; 
 
             const intervalDuration = 50; 
             let spinTicks = 0;
 
             const spinInterval = setInterval(() => {
                 if (spinTicks < 40) { 
-                    // Cycle through available names to show movement
                     const tempIndex = Math.floor(Math.random() * availableContestants.length);
                     if(availableContestants[tempIndex]) {
                          winnerNameEl.textContent = availableContestants[tempIndex];
@@ -447,13 +583,12 @@
                 threeDContainer.classList.remove('spin-active');
                 
                 // Final UI updates
-                // Changed the span class to use text-2xl for better fit AND changed text-center to text-left
                 const winnerListHtml = window.currentWinners.map(name => 
                     `<span class="text-2xl font-extrabold font-christmas text-yellow-600 text-left block mb-2">${name}</span>`
                 ).join('');
 
-                winnerNameEl.textContent = `${window.currentWinners.length} Winner${window.currentWinners.length !== 1 ? 's' : ''} Found!`; // Announce the count on the main screen
-                modalWinnerNameEl.innerHTML = winnerListHtml; // List winners in the modal
+                winnerNameEl.textContent = `${window.currentWinners.length} Winner${window.currentWinners.length !== 1 ? 's' : ''} Found!`; 
+                modalWinnerNameEl.innerHTML = winnerListHtml; 
                 
                 winnerAnnouncementEl.classList.add('winner-pulse'); 
                 
@@ -461,6 +596,8 @@
                 modalTitleEl.textContent = `${window.currentWinners.length} Winner${window.currentWinners.length !== 1 ? 's' : ''} Have Been Chosen!`;
                 modalQuestionEl.textContent = `The following name${window.currentWinners.length !== 1 ? 's were' : ' was'} chosen. Should we remove ${window.currentWinners.length !== 1 ? 'them' : 'it'} from the list or keep ${window.currentWinners.length !== 1 ? 'them' : 'it'} in for another chance?`;
 
+                // --- NEW: Play TTS Announcement ---
+                playTtsAudio(window.currentWinners);
 
                 generateConfetti();
 
@@ -479,36 +616,24 @@
             confettiContainer.innerHTML = '';
 
             if (shouldRemove) {
-                // Loop through all current winners and remove them
                 window.currentWinners.forEach(winner => {
-                    // We must use the current names list to find and remove,
-                    // but we need to iterate backwards or use a filtered array 
-                    // if multiple identical names were possible. Since we assume
-                    // unique names for this raffle, finding the index is fine.
                     const index = window.contestants.indexOf(winner);
                     if (index > -1) {
-                        // 1. Record the winner in history
                         window.winnersHistory.push(window.contestants[index]);
-
-                        // 2. Remove from active contestants
                         window.contestants.splice(index, 1);
                     }
                 });
 
-                // Save updated data
                 saveWinnersToLocalStorage();
                 renderWinnersHistory(); 
                 const newNamesString = window.contestants.join('\n');
                 contestantInput.value = newNamesString; 
-                saveNamesToLocalStorage(newNamesString); // Save new list
-                console.log(`Removed and recorded ${window.currentWinners.length} winners.`);
-            } else {
-                console.log(`Retained ${window.currentWinners.length} winners.`);
-            }
+                saveNamesToLocalStorage(newNamesString); 
+            } 
             
-            window.currentWinners = []; // Reset the list
+            window.currentWinners = []; 
             contestantInput.disabled = false;
-            numWinnersInput.disabled = false; // Re-enable input
+            numWinnersInput.disabled = false; 
             raffleButton.textContent = 'START RAFFLE SPIN';
             
             updateContestantList(contestantInput.value); 
@@ -520,28 +645,29 @@
         contestantInput.addEventListener('input', (e) => {
             const namesString = e.target.value;
             updateContestantList(namesString);
-            saveNamesToLocalStorage(namesString); // Save data on every input
+            saveNamesToLocalStorage(namesString); 
         });
 
         // Initialize Local Storage and 3D Visualizer on window load
         window.onload = function() {
-            loadNamesFromLocalStorage(); // Load data first
+            loadNamesFromLocalStorage(); 
             setupThreeD();
             updateContestantList(contestantInput.value);
-            validateNumWinners(); // Initial validation
+            validateNumWinners(); 
+            
+            // For TTS to work, the browser often requires the AudioContext to be initialized 
+            // after a user interaction. The first raffle button click will handle this.
         };
 
 
-        // --- THREE.JS VISUALIZER SETUP & INTERACTIVITY (FIXED) ---
+        // --- THREE.JS VISUALIZER SETUP & INTERACTIVITY ---
         let scene, camera, renderer, sphere;
         let mouseX = 0, mouseY = 0;
         let containerRect = null;
 
 
         function setupThreeD() {
-            // Check if THREE is defined
             if (typeof THREE === 'undefined') {
-                 console.error("Three.js not loaded. Cannot run 3D visualizer.");
                  threeDContainer.innerHTML = '<div class="text-xs text-red-600 p-2">3D Effect Unavailable</div>';
                  return;
             }
@@ -552,7 +678,6 @@
 
             scene = new THREE.Scene();
             
-            // Fixed: Removed the extra 'new' keyword
             camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
             camera.position.z = 2;
 
@@ -593,16 +718,13 @@
             animate();
         }
         
-        // Handle mouse movement for tilt effect
         function onMouseMove(event) {
             if (window.isSpinning || !containerRect) return;
 
-            // Calculate mouse position relative to the container center
             const rect = threeDContainer.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
 
-            // Normalize and scale position to a small rotation angle
             mouseX = (event.clientX - centerX) * 0.005; 
             mouseY = (event.clientY - centerY) * 0.005;
         }
@@ -611,12 +733,9 @@
             requestAnimationFrame(animate);
 
             if (window.isSpinning) {
-                // Rapid spin
                 sphere.rotation.x += 0.3; 
                 sphere.rotation.y += 0.5;
             } else {
-                // Gentle idle movement + tilt based on mouse position
-                // Use a damping factor (0.1) to smoothly move towards the mouse position
                 sphere.rotation.x += (mouseY - sphere.rotation.x) * 0.1;
                 sphere.rotation.y += (mouseX - sphere.rotation.y) * 0.1;
             }
