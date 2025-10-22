@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎄 Christmas Prize Raffle Spinner</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Three.js for a visual effect (used as a simple 3D spin indicator) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Mountains+of+Christmas:wght@400;700&display=swap');
+        
+        /* Custom Christmas Font */
+        .font-christmas {
+            font-family: 'Mountains of Christmas', cursive;
+        }
+
+        /* Body background: Deep forest gradient */
+        body {
+            background: linear-gradient(135deg, #10403c 0%, #000000 100%);
+        }
+
+        /* NEW: Main Card Layered Shadow/Outline */
+        .main-card {
+            /* Deeper box shadow effect */
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7), 0 0 0 8px #facc15; /* Deep shadow with gold outline */
+        }
+        
+        /* Spinning Animation Keyframes */
+        @keyframes fastSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(3600deg); } /* 10 full rotations */
+        }
+
+        /* Class to apply for spinning */
+        .spin-active {
+            animation: fastSpin 3s cubic-bezier(0.1, 0.7, 1.0, 1.0) forwards;
+        }
+
+        /* --- Winner Effect (Pulsing Bounce) --- */
+        @keyframes winnerBounce {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(255, 255, 255, 0); }
+            50% { transform: scale(1.05); box-shadow: 0 0 40px #facc15; } /* Stronger Yellow/Gold glow */
+        }
+
+        /* Class for Winner Effect */
+        .winner-pulse {
+            animation: winnerBounce 0.4s ease-out 3; 
+            border-color: #f59e0b !important;
+            background-color: #fffbeb !important;
+        }
+        /* -------------------------------------- */
+
+        /* --- Confetti Effect --- */
+        @keyframes confetti-fall {
+            0% { transform: translate3d(0, -100px, 0) rotate(0deg); opacity: 1; }
+            100% { transform: translate3d(var(--x-end), 100vh, 0) rotate(720deg); opacity: 0; }
+        }
+
+        .confetti {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%; /* Make them round */
+            opacity: 0;
+            z-index: 60; /* Above everything else */
+            animation: confetti-fall var(--duration) linear forwards;
+        }
+        /* -------------------------------------- */
+
+        /* NEW: Button Glow Animation */
+        @keyframes buttonGlow {
+            0% { filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+            50% { filter: drop-shadow(0 0 15px #dcfce7) drop-shadow(0 0 20px #a7f3d0); } /* Subtle Green/White glow */
+            100% { filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+        }
+        .raffle-glow {
+            animation: buttonGlow 3s infinite ease-in-out;
+        }
+
+        /* Custom scrollbar for festive feel */
+        textarea::-webkit-scrollbar { width: 8px; }
+        textarea::-webkit-scrollbar-track { background: #d1fae5; border-radius: 10px; }
+        textarea::-webkit-scrollbar-thumb { background: #ef4444; border-radius: 10px; }
+        
+        .modal-backdrop { z-index: 50; }
+        #threeDContainer { z-index: 10; }
+        
+        /* ADJUSTMENT: Allow long text in the modal to wrap and fit */
+        .winner-name-text {
+            word-wrap: break-word; /* Ensure wrapping on very long words if needed */
+            overflow-wrap: break-word; /* Standard property for wrapping */
+            text-overflow: clip; /* Prevent overflow display issues */
+        }
+
+        /* NEW SCROLLBAR STYLES FOR WINNER LIST */
+        /* Make the scrollbar festive for the winner list box */
+        #modal-winner-name::-webkit-scrollbar { width: 8px; }
+        #modal-winner-name::-webkit-scrollbar-track { background: #fee2e2; border-radius: 10px; } /* Red Track */
+        #modal-winner-name::-webkit-scrollbar-thumb { background: #facc15; border-radius: 10px; } /* Gold Thumb */
+    </style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Raffle Container (Enhanced Border/Shadow) -->
+    <div class="main-card w-full max-w-4xl bg-white rounded-2xl p-6 md:p-10 border-8 border-double border-red-700 transform hover:scale-[1.01] transition duration-500">
+        
+        <!-- Header: Logo and Title -->
+        <div class="text-center mb-6">
+            <!-- UPDATED: Use the external URL for the logo -->
+            <img src="https://prbs.pnp.gov.ph/wp-content/uploads/2022/05/PNP-PRBS.png" 
+                 alt="PNP Retirement and Benefits Administration Service Logo" 
+                 onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
+                 class="mx-auto w-24 h-24 mb-3 shadow-xl hover:scale-105 transition duration-300">
+            
+            <!-- Fallback text if the image link is broken -->
+            <p id="logo-fallback" class="text-xs text-gray-500 font-semibold hidden">
+                (PNP-PRBS Logo)
+            </p>
+
+            <h1 class="text-4xl md:text-5xl font-christmas text-red-700">
+                <span class="text-yellow-500">✨</span> Christmas Raffle Wheel <span class="text-yellow-500">✨</span>
+            </h1>
+        </div>
+        
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Contestant List Area -->
+            <div class="p-4 bg-green-50 rounded-xl shadow-inner border-4 border-dashed border-green-400">
+                <h2 class="text-xl font-bold font-christmas text-green-800 mb-3">Contestants List</h2>
+                <p class="text-sm text-gray-600 mb-2">Enter one name per line. (**Names are saved automatically to your browser**).</p>
+                <textarea id="contestant-input" rows="10" class="w-full p-3 border-4 border-red-500/70 rounded-lg focus:ring-red-600 focus:border-red-600 transition duration-150 text-gray-800 bg-white shadow-md" placeholder="Name 1&#10;Name 2&#10;Santa Claus"></textarea>
+                <div class="mt-3 text-red-700 font-semibold" id="count-display">0 Contestants Ready</div>
+            </div>
+
+            <!-- Wheel/Spin Area -->
+            <div class="flex flex-col items-center justify-center p-4 bg-red-50 rounded-xl shadow-2xl border-4 border-dashed border-red-400">
+                <h2 class="text-xl font-bold font-christmas text-red-800 mb-4">Spin to Win!</h2>
+                
+                <!-- NEW: Number of Winners Input -->
+                <div class="w-full mb-4">
+                    <label for="num-winners" class="block text-sm font-semibold text-gray-700 mb-1">Number of Winners for this Prize:</label>
+                    <input type="number" id="num-winners" value="1" min="1" class="w-full p-2 border-2 border-green-500 rounded-lg text-center font-bold text-lg focus:ring-green-600 focus:border-green-600 transition duration-150" oninput="validateNumWinners()">
+                    <p id="winner-error" class="text-xs text-red-500 mt-1 hidden font-semibold">Cannot exceed the number of available contestants!</p>
+                </div>
+
+                <!-- 3D Spinning Indicator (Sphere) -->
+                <div id="threeDContainer" class="w-40 h-40 bg-gray-200 rounded-full shadow-inner flex items-center justify-center overflow-hidden mb-6 border-4 border-yellow-500 transition duration-300 ease-in-out cursor-pointer">
+                    <!-- Three.js Canvas will be injected here -->
+                </div>
+
+                <!-- Winner Display (Wider and more pronounced) -->
+                <div id="winner-announcement" class="h-20 w-full text-center flex items-center justify-center bg-yellow-100 border-4 border-yellow-500 rounded-full shadow-xl mb-6 transition-all duration-300">
+                    <p id="winner-name" class="text-3xl font-extrabold font-christmas text-red-700 p-2">
+                        Ready to Spin!
+                    </p>
+                </div>
+
+                <!-- Raffle Button (Enhanced Gradient/Shadow and Glow) -->
+                <button id="raffle-button" 
+                        class="w-full py-4 text-2xl font-bold font-christmas text-white rounded-xl shadow-2xl transition transform duration-200 
+                               bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 hover:scale-105 active:scale-95 disabled:bg-gray-400 disabled:shadow-none border-b-4 border-green-800 raffle-glow"
+                        onclick="startRaffle()">
+                    <i id="raffle-icon" class="fa-solid fa-gift mr-2"></i> START RAFFLE SPIN
+                </button>
+            </div>
+        </div>
+        
+        <!-- MODIFIED: Winners History Area with Clear Button -->
+        <div class="mt-8 p-4 bg-yellow-50 rounded-xl shadow-inner border-4 border-dashed border-yellow-400">
+            <h2 class="text-xl font-bold font-christmas text-red-800 mb-3 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="text-3xl mr-2">🏆</span> Winners History
+                </div>
+                <!-- NEW CLEAR BUTTON -->
+                <button onclick="clearWinnersHistory()" id="clear-history-button"
+                        class="px-3 py-1 text-sm font-semibold rounded-full text-white bg-red-600 hover:bg-red-700 transition duration-150 shadow-md disabled:opacity-50">
+                    Clear History
+                </button>
+            </h2>
+            <div id="winners-history-list" class="text-lg text-gray-700 font-semibold min-h-[50px] p-2 bg-white rounded-lg shadow-md flex flex-wrap gap-2">
+                <p class="text-gray-500">No winners recorded yet.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal for Winner Choice (Remove/Retain) -->
+    <div id="choice-modal" class="fixed inset-0 bg-black bg-opacity-80 modal-backdrop hidden items-center justify-center p-4">
+        <!-- Modal Content (relative for confetti positioning) -->
+        <div id="modal-content" class="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full transform transition-all scale-100 border-8 border-yellow-500 relative overflow-hidden">
+            <!-- Confetti Container -->
+            <div id="confetti-container"></div>
+            
+            <h3 id="modal-title" class="text-3xl font-christmas text-red-700 text-center mb-4 relative z-10">We Have a Winner!</h3>
+            <p class="text-xl text-center text-green-800 mb-6 relative z-10">Congratulations to:</p>
+            
+            <!-- MODIFIED: Changed text-center to text-left -->
+            <div id="modal-winner-name" class="text-2xl md:text-3xl font-extrabold font-christmas text-yellow-600 text-left mb-8 bg-red-50 p-3 rounded-lg border-2 border-yellow-600 shadow-xl transition-all duration-300 relative z-10 space-y-2 winner-name-text max-h-64 overflow-y-auto">
+                <!-- Winners will be listed here -->
+            </div>
+            
+            <p id="modal-question" class="text-md text-gray-700 text-center mb-6 relative z-10">Should we remove this name from the list or keep them in for another chance?</p>
+            
+            <div class="flex space-x-4 relative z-10">
+                <button onclick="handleWinnerChoice(true)" 
+                        class="flex-1 py-3 text-lg font-bold text-white rounded-lg transition duration-150 bg-red-600 hover:bg-red-700 shadow-md">
+                    Remove Name(s)
+                </button>
+                <button onclick="handleWinnerChoice(false)" 
+                        class="flex-1 py-3 text-lg font-bold text-white rounded-lg transition duration-150 bg-green-600 hover:bg-green-700 shadow-md">
+                    Retain Name(s)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Block (Now using Local Storage) -->
+    <script>
+        // Global State
+        window.contestants = [];
+        window.currentWinners = []; // Changed to hold multiple winners
+        window.isSpinning = false;
+        // Array to store history of winners removed from the list
+        window.winnersHistory = [];
+        
+        // DOM Elements
+        const contestantInput = document.getElementById('contestant-input');
+        const countDisplay = document.getElementById('count-display');
+        const raffleButton = document.getElementById('raffle-button');
+        const winnerNameEl = document.getElementById('winner-name');
+        const modalWinnerNameEl = document.getElementById('modal-winner-name');
+        const choiceModal = document.getElementById('choice-modal');
+        const threeDContainer = document.getElementById('threeDContainer');
+        const winnerAnnouncementEl = document.getElementById('winner-announcement');
+        const confettiContainer = document.getElementById('confetti-container');
+        const winnersHistoryListEl = document.getElementById('winners-history-list');
+        // NEW DOM Elements
+        const numWinnersInput = document.getElementById('num-winners');
+        const winnerErrorEl = document.getElementById('winner-error');
+        const modalTitleEl = document.getElementById('modal-title');
+        const modalQuestionEl = document.getElementById('modal-question');
+
+
+        // --- LOCAL STORAGE DATA HANDLING ---
+        const CONTESTANT_STORAGE_KEY = 'raffleContestantsList';
+        const WINNERS_STORAGE_KEY = 'raffleWinnersHistory';
+
+        function saveNamesToLocalStorage(namesString) {
+            try {
+                localStorage.setItem(CONTESTANT_STORAGE_KEY, namesString);
+                console.log("Names saved to Local Storage.");
+            } catch (error) {
+                console.error("Failed to save contestants list to Local Storage:", error);
+            }
+        }
+        
+        // Save winners history
+        function saveWinnersToLocalStorage() {
+            try {
+                localStorage.setItem(WINNERS_STORAGE_KEY, JSON.stringify(window.winnersHistory));
+                console.log("Winners history saved.");
+            } catch (error) {
+                console.error("Failed to save winners history to Local Storage:", error);
+            }
+        }
+
+        function loadNamesFromLocalStorage() {
+            try {
+                // Load Contestants
+                const namesString = localStorage.getItem(CONTESTANT_STORAGE_KEY) || ""; 
+                contestantInput.value = namesString;
+                updateContestantList(namesString);
+                
+                // Load Winners History
+                const winnersString = localStorage.getItem(WINNERS_STORAGE_KEY) || "[]";
+                window.winnersHistory = JSON.parse(winnersString);
+                renderWinnersHistory(); // Display the loaded history
+
+                console.log("All data loaded from Local Storage.");
+            } catch (error) {
+                console.error("Failed to load data from Local Storage:", error);
+            }
+        }
+        
+        // Function to clear the history
+        window.clearWinnersHistory = function() {
+            // 1. Reset the global array
+            window.winnersHistory = [];
+            
+            // 2. Clear the local storage entry
+            try {
+                localStorage.removeItem(WINNERS_STORAGE_KEY);
+                console.log("Winners history cleared from Local Storage.");
+            } catch (error) {
+                console.error("Failed to clear winners history from Local Storage:", error);
+            }
+            
+            // 3. Update the UI
+            renderWinnersHistory(); 
+        }
+
+        // --- CORE RAFFLE LOGIC ---
+        
+        // NEW: Validation function for the number of winners
+        window.validateNumWinners = function() {
+            let num = parseInt(numWinnersInput.value);
+            const max = window.contestants.length;
+
+            if (isNaN(num) || num < 1) {
+                num = 1;
+            } else if (num > max) {
+                num = max;
+                winnerErrorEl.classList.remove('hidden');
+            } else {
+                winnerErrorEl.classList.add('hidden');
+            }
+            numWinnersInput.value = num;
+            
+            // Disable raffle if spinning or if there are no contestants or if the required winners > contestants
+            raffleButton.disabled = window.isSpinning || window.contestants.length === 0 || num > window.contestants.length;
+        }
+
+
+        function updateContestantList(text) {
+            window.contestants = text
+                .split(/[\n,]+/)
+                .map(name => name.trim())
+                .filter(name => name.length > 0);
+
+            countDisplay.textContent = `${window.contestants.length} Contestant${window.contestants.length !== 1 ? 's' : ''} Ready`;
+            
+            // Call validation to update button state and winner count input
+            window.validateNumWinners(); 
+
+            if (window.contestants.length === 0) {
+                winnerNameEl.textContent = "Add names to begin!";
+            } else if (!window.isSpinning) {
+                 winnerNameEl.textContent = "Ready to Spin!";
+            }
+        }
+        
+        // Function to display the winners history
+        function renderWinnersHistory() {
+            const clearButton = document.getElementById('clear-history-button');
+
+            if (window.winnersHistory.length === 0) {
+                winnersHistoryListEl.innerHTML = '<p class="text-gray-500">No winners recorded yet.</p>';
+                if (clearButton) clearButton.disabled = true; // Disable if empty
+                return;
+            }
+            
+            // Enable if there are winners
+            if (clearButton) clearButton.disabled = false;
+
+            // Display as festive badges, including the sequential spin number (index + 1)
+            winnersHistoryListEl.innerHTML = window.winnersHistory.map((name, index) => 
+                // Index + 1 gives the spin number (e.g., 1, 2, 3...)
+                `<span class="inline-block bg-red-100 text-red-800 text-sm font-bold mr-2 mb-2 px-3 py-1 rounded-full border border-red-400 hover:bg-red-200 transition duration-150">
+                    [#${index + 1}] ${name}
+                </span>`
+            ).join('');
+        }
+
+        // Confetti Generation
+        const CONFETTI_COLORS = ['#ef4444', '#10b981', '#facc15', '#f97316', '#3b82f6'];
+        function generateConfetti() {
+            const numConfetti = 50;
+            const modalRect = document.getElementById('modal-content').getBoundingClientRect();
+            
+            confettiContainer.innerHTML = ''; 
+
+            for (let i = 0; i < numConfetti; i++) {
+                const c = document.createElement('div');
+                c.className = 'confetti';
+                
+                const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+                const duration = 2.5 + Math.random() * 1.5; 
+                const startX = Math.random() * modalRect.width;
+                const endX = (Math.random() * 600) - 300; 
+
+                c.style.backgroundColor = color;
+                c.style.left = `${startX}px`;
+                c.style.top = `-10px`; 
+                c.style.setProperty('--duration', `${duration}s`);
+                c.style.setProperty('--x-end', `${endX}px`);
+
+                confettiContainer.appendChild(c);
+            }
+        }
+
+        window.startRaffle = function() {
+            const numWinners = parseInt(numWinnersInput.value);
+
+            if (window.isSpinning || window.contestants.length === 0 || window.contestants.length < numWinners) {
+                return; 
+            }
+            
+            window.isSpinning = true;
+            raffleButton.disabled = true;
+            contestantInput.disabled = true;
+            numWinnersInput.disabled = true;
+
+            winnerAnnouncementEl.classList.remove('winner-pulse');
+            confettiContainer.innerHTML = '';
+            
+            // --- Select Multiple Unique Winners ---
+            
+            // 1. Create a copy of contestants
+            let availableContestants = [...window.contestants];
+
+            // 2. Shuffle the array (Fisher-Yates) and slice the required number of winners
+            for (let i = availableContestants.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [availableContestants[i], availableContestants[j]] = [availableContestants[j], availableContestants[i]];
+            }
+            
+            window.currentWinners = availableContestants.slice(0, numWinners);
+            
+            // --- UI Spin Animation ---
+
+            threeDContainer.classList.add('spin-active');
+            raffleButton.textContent = 'SPINNING...';
+            winnerNameEl.textContent = `Finding ${numWinners} Winner${numWinners !== 1 ? 's' : ''}...`; // Show count during spin
+
+            const intervalDuration = 50; 
+            let spinTicks = 0;
+
+            const spinInterval = setInterval(() => {
+                if (spinTicks < 40) { 
+                    // Cycle through available names to show movement
+                    const tempIndex = Math.floor(Math.random() * availableContestants.length);
+                    if(availableContestants[tempIndex]) {
+                         winnerNameEl.textContent = availableContestants[tempIndex];
+                    }
+                    spinTicks++;
+                } else {
+                    clearInterval(spinInterval);
+                }
+            }, intervalDuration);
+
+
+            setTimeout(() => {
+                threeDContainer.classList.remove('spin-active');
+                
+                // Final UI updates
+                // Changed the span class to use text-2xl for better fit AND changed text-center to text-left
+                const winnerListHtml = window.currentWinners.map(name => 
+                    `<span class="text-2xl font-extrabold font-christmas text-yellow-600 text-left block mb-2">${name}</span>`
+                ).join('');
+
+                winnerNameEl.textContent = `${window.currentWinners.length} Winner${window.currentWinners.length !== 1 ? 's' : ''} Found!`; // Announce the count on the main screen
+                modalWinnerNameEl.innerHTML = winnerListHtml; // List winners in the modal
+                
+                winnerAnnouncementEl.classList.add('winner-pulse'); 
+                
+                // Update modal title and body text for multiple winners
+                modalTitleEl.textContent = `${window.currentWinners.length} Winner${window.currentWinners.length !== 1 ? 's' : ''} Have Been Chosen!`;
+                modalQuestionEl.textContent = `The following name${window.currentWinners.length !== 1 ? 's were' : ' was'} chosen. Should we remove ${window.currentWinners.length !== 1 ? 'them' : 'it'} from the list or keep ${window.currentWinners.length !== 1 ? 'them' : 'it'} in for another chance?`;
+
+
+                generateConfetti();
+
+                choiceModal.classList.remove('hidden');
+                choiceModal.classList.add('flex');
+                
+                window.isSpinning = false;
+            }, 3000); 
+        }
+
+        window.handleWinnerChoice = function(shouldRemove) {
+            choiceModal.classList.add('hidden');
+            choiceModal.classList.remove('flex');
+
+            winnerAnnouncementEl.classList.remove('winner-pulse');
+            confettiContainer.innerHTML = '';
+
+            if (shouldRemove) {
+                // Loop through all current winners and remove them
+                window.currentWinners.forEach(winner => {
+                    // We must use the current names list to find and remove,
+                    // but we need to iterate backwards or use a filtered array 
+                    // if multiple identical names were possible. Since we assume
+                    // unique names for this raffle, finding the index is fine.
+                    const index = window.contestants.indexOf(winner);
+                    if (index > -1) {
+                        // 1. Record the winner in history
+                        window.winnersHistory.push(window.contestants[index]);
+
+                        // 2. Remove from active contestants
+                        window.contestants.splice(index, 1);
+                    }
+                });
+
+                // Save updated data
+                saveWinnersToLocalStorage();
+                renderWinnersHistory(); 
+                const newNamesString = window.contestants.join('\n');
+                contestantInput.value = newNamesString; 
+                saveNamesToLocalStorage(newNamesString); // Save new list
+                console.log(`Removed and recorded ${window.currentWinners.length} winners.`);
+            } else {
+                console.log(`Retained ${window.currentWinners.length} winners.`);
+            }
+            
+            window.currentWinners = []; // Reset the list
+            contestantInput.disabled = false;
+            numWinnersInput.disabled = false; // Re-enable input
+            raffleButton.textContent = 'START RAFFLE SPIN';
+            
+            updateContestantList(contestantInput.value); 
+        }
+
+
+        // --- EVENT LISTENERS ---
+
+        contestantInput.addEventListener('input', (e) => {
+            const namesString = e.target.value;
+            updateContestantList(namesString);
+            saveNamesToLocalStorage(namesString); // Save data on every input
+        });
+
+        // Initialize Local Storage and 3D Visualizer on window load
+        window.onload = function() {
+            loadNamesFromLocalStorage(); // Load data first
+            setupThreeD();
+            updateContestantList(contestantInput.value);
+            validateNumWinners(); // Initial validation
+        };
+
+
+        // --- THREE.JS VISUALIZER SETUP & INTERACTIVITY (FIXED) ---
+        let scene, camera, renderer, sphere;
+        let mouseX = 0, mouseY = 0;
+        let containerRect = null;
+
+
+        function setupThreeD() {
+            // Check if THREE is defined
+            if (typeof THREE === 'undefined') {
+                 console.error("Three.js not loaded. Cannot run 3D visualizer.");
+                 threeDContainer.innerHTML = '<div class="text-xs text-red-600 p-2">3D Effect Unavailable</div>';
+                 return;
+            }
+            
+            const width = 160; 
+            const height = 160; 
+            containerRect = threeDContainer.getBoundingClientRect(); 
+
+            scene = new THREE.Scene();
+            
+            // Fixed: Removed the extra 'new' keyword
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera.position.z = 2;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setClearColor(0x000000, 0);
+            threeDContainer.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const pointLight = new THREE.PointLight(0xffffff, 0.8);
+            pointLight.position.set(5, 5, 5);
+            scene.add(pointLight);
+
+            const geometry = new THREE.SphereGeometry(0.8, 32, 32);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: 0xffd700, 
+                specular: 0xffffff,
+                shininess: 100,
+                flatShading: false 
+            });
+
+            sphere = new THREE.Mesh(geometry, material);
+            scene.add(sphere);
+
+            // Ribbon effect for the gift look
+            const torusGeometry = new THREE.TorusGeometry(0.85, 0.05, 16, 100);
+            const torusMaterial = new THREE.MeshBasicMaterial({ color: 0xcc0000 });
+            const ribbonX = new THREE.Mesh(torusGeometry, torusMaterial);
+            const ribbonY = new THREE.Mesh(torusGeometry, torusMaterial);
+            ribbonY.rotation.x = Math.PI / 2;
+            sphere.add(ribbonX);
+            sphere.add(ribbonY);
+
+            // NEW: Mouse Interaction Listener
+            threeDContainer.addEventListener('mousemove', onMouseMove);
+            
+            animate();
+        }
+        
+        // Handle mouse movement for tilt effect
+        function onMouseMove(event) {
+            if (window.isSpinning || !containerRect) return;
+
+            // Calculate mouse position relative to the container center
+            const rect = threeDContainer.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            // Normalize and scale position to a small rotation angle
+            mouseX = (event.clientX - centerX) * 0.005; 
+            mouseY = (event.clientY - centerY) * 0.005;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (window.isSpinning) {
+                // Rapid spin
+                sphere.rotation.x += 0.3; 
+                sphere.rotation.y += 0.5;
+            } else {
+                // Gentle idle movement + tilt based on mouse position
+                // Use a damping factor (0.1) to smoothly move towards the mouse position
+                sphere.rotation.x += (mouseY - sphere.rotation.x) * 0.1;
+                sphere.rotation.y += (mouseX - sphere.rotation.y) * 0.1;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+    </script>
+    
+    <!-- Font Awesome for the gift icon -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script> 
+</body>
+</html>
